@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<head>
+    <title>Page Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="//d3js.org/topojson.v1.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+</head>
+<style>
+    
+    
+    .subunit-boundary {
+        fill: none;
+        stroke: #fff;
+        stroke-dasharray: 5, 0;
+        stroke-linejoin: round;
+    }
+</style>
+
+<body>
+
+<select id="party">
+    <!--<option value="">請選擇黨派</option>-->
+</select>
+<br>
+里:<span id = "label"></span><br>
+總票數:<span id = "total"></span><br>
+得票數:<span id = "votes"></span><br>
+得票率:<span id = "rate"></span><br>
+
+
+
+<div id="map"></div>
+
+</body>
+<script>
+    var villages = [];
+    var basevotes = [];
+    var partyvotes = [];
+    var partyrates = [];
+    var fillcolors = [];
+    var colorrange = []; 
+    var range = [];
+    function draw() {
+        var width = 800,
+            height = 600;
+        d3.select("svg").remove();
+        var svg = d3.select("#map").append("svg")
+            // .attr("class", "svgback")
+            .attr("width", width)
+            .attr("height", height);
+
+        var projection = d3.geo.mercator()
+            .center([120.2, 23])
+            .scale(700000);
+
+        var path = d3.geo.path()
+            .projection(projection);
+
+      
+
+        
+
+        
+
+        //console.log("+++++"+$("#party :selected").text()+"+++++");
+        
+
+        
+
+        
+
+        d3.json("taiwan.json", function(error, topology) {
+            console.log(topology);
+            var g = svg.append("g");
+
+            // 縣市/行政區界線
+            d3.select("svg").append("path").datum(
+                topojson.mesh(topology,
+                    topology.objects["VILLAGE_MOI_1100316"],
+                    function(a,
+                        b) {
+                        return a !== b;
+                    })).attr("d", path).attr("class", "subunit-boundary");
+
+            d3.select("g").selectAll("path")
+                .data(topojson.feature(topology, topology.objects.VILLAGE_MOI_1100316).features)
+                .enter()
+                .append("path")
+                .attr("d", path)
+                .attr({
+                    d: path,
+                    name: function(d) {
+                        return d.properties["VILLNAME"];
+                    },
+                    fill: function(d) {
+                        var fillcolor = 0;
+                        fillcolors.filter(function (item) {
+                            return item.village == d.properties["VILLNAME"];
+                        }).forEach(function(item){
+                            fillcolor = item.color;
+                        });
+                        console.log(d.properties["VILLNAME"]+":" + fillcolor);
+
+                        var min = fillcolors.sort(function(a, b) {
+                            return a.color - b.color;
+                        })[0].color;
+
+                        var max = fillcolors.sort(function(a, b) {
+                            return a.color - b.color;
+                        })[fillcolors.length-1].color;
+
+                        console.log("min:" + min +",max:" + max)
+
+                        var color = d3.scale
+                        .linear()
+                        .domain([min,max])
+                        .range(range);
+                        return color(fillcolor);
+                    },
+                    stroke: "#FFD306"
+
+                }).attr('stroke-width', "1")
+                .on("mouseover", function(d) {
+                    d3.select(this).attr("fill", "#FFDC35");
+                    console.log(d.properties["VILLNAME"]);
+                    $("#label").text(d.properties["VILLNAME"]);
+
+                    var total = 0;
+                    var votes = 0;
+                    var rate = 0; 
+
+                    basevotes.filter(function (item) {
+                        return item.village == d.properties["VILLNAME"];
+                    }).forEach(function (item) {
+                        total = item.votes;
+                    });
+
+                    partyvotes.filter(function (item) {
+                        return item.village == d.properties["VILLNAME"];
+                    }).forEach(function (item) {
+                        votes = item.votes;
+                    });
+
+                    rate = ((votes * 100) / total).toFixed(2);
+
+                    $("#total").text(total);
+                    $("#votes").text(votes);
+                    $("#rate").text(rate + "%");
+
+                   
+                  
+                    
+
+                }).on("mouseleave", function(d) {
+                    d3.select(this).attr({fill: function() {
+                        var fillcolor = 0;
+                        fillcolors.filter(function (item) {
+                            return item.village == d.properties["VILLNAME"];
+                        }).forEach(function(item){
+                            fillcolor = item.color;
+                        });
+                        console.log(d.properties["VILLNAME"]+":" + fillcolor);
+
+                        var min = fillcolors.sort(function(a, b) {
+                            return a.color - b.color;
+                        })[0].color;
+
+                        var max = fillcolors.sort(function(a, b) {
+                            return b.color - a.color;
+                        })[0].color;
+
+                        var color = d3.scale
+                        .linear()
+                        .domain([min,max])
+                        .range(range); 
+
+                        return color(fillcolor);
+                    }});
+                });
+        });
+
+       
+
+       
+
+        
+
+        //
+    }
+
+    $.getJSON("partylist.json", function(data){
+        //console.log(data);
+        var parties = data.sort(function(a, b) {
+            return a.no - b.no;
+        });
+        parties.forEach(function(item){
+            console.log();
+            
+        
+            
+            $("#party").append($("<option></option>").attr("value", item.no).text(item.party));
+        });
+    }).fail(function(){
+        console.log("An error has occurred.");
+    });
+
+    $( "#party" ).change(function() {
+        updateDataSet($("#party :selected").text(),"中西區");
+        
+        draw();
+    });
+
+    function updateDataSet(party, town) {
+        //var total =0;
+        //var votes = 0;
+
+        if( party == '台灣基進' || 
+            party == '喜樂島聯盟' ||
+            party == '一邊一國行動黨' ||
+            party == '綠黨' ||
+            party == '民主進步黨' || 
+            party == '台灣維新' || 
+            party == '台澎黨' ||
+            party == '台灣團結聯盟') {
+            range = ['#00EC00', '#006000'];
+        } else if(party == '勞動黨' || party == '新黨' || party == '中華統一促進黨') {
+            range = ['#FFECEC', '#FF0000'];
+        } else if(party == '時代力量') {
+            range = ['#FFFFDF', '#FFFF37'];
+        }else {
+            range = ['#ECF5FF', '#0080FF'];
+        }
+
+        villages = [];
+        basevotes = [];
+        partyvotes = [];
+        partyrates = [];
+        fillcolors= [];
+        
+        $.ajaxSetup({
+            async: false
+        });
+        $.getJSON("taiwan.json", function(data){
+        //
+            
+            data.objects.VILLAGE_MOI_1100316.geometries.forEach(function(item){
+                villages.push(item.properties.VILLNAME);
+            });
+            
+
+        }).fail(function(){
+            console.log("An error has occurred.");
+        });
+        console.log(villages);
+
+        villages.forEach(function(village){
+            $.getJSON("basevotes.json", function(data){
+                var votes = 0;
+                data.filter(function (item) {
+                    return item.village == village && item.town == town;
+                }).forEach(function(item){
+                    votes+=item.votes;
+                });
+                var basevote = new Object();
+                basevote.village = village;
+                basevote.votes = votes;
+                basevotes.push(basevote);
+            }).fail(function(){
+                console.log("An error has occurred.");
+            });
+        });
+
+
+        villages.forEach(function(village){
+            $.getJSON("partyvotes.json", function(data){
+                var votes = 0;
+                data.filter(function (item) {
+                    return item.village == village && item.town == town && item.party == party;
+                }).forEach(function(item){
+                    votes+=item.votes;
+                });
+                var partyvote = new Object();
+                partyvote.village = village;
+                partyvote.votes = votes;
+                partyvotes.push(partyvote);
+            }).fail(function(){
+                console.log("An error has occurred.");
+            });
+        });
+
+
+        villages.forEach(function(village){
+            
+            var partyrate = new Object();
+            var fillcolor = new Object();
+            var partyvote = 0; 
+            var basevote = 0;; 
+
+            partyvotes.filter(function (item) {
+                return item.village == village;
+            }).forEach(function(item){
+                partyvote = item.votes;
+            });
+
+            basevotes.filter(function (item) {
+                return item.village == village;
+            }).forEach(function(item){
+                basevote = item.votes;
+            });
+
+            partyrate.village = village;
+            partyrate.rate = ((partyvote*100)/basevote).toFixed(2);
+            partyrates.push(partyrate);
+
+            fillcolor.village = village;
+            fillcolor.color = Math.floor((partyvote*10000)/basevote);
+            fillcolors.push(fillcolor);
+        });
+
+       
+       
+
+        console.log("base");
+        console.log(basevotes);
+        console.log("party");
+        console.log(partyvotes);
+        console.log("rate");
+        console.log(partyrates);
+        console.log("color");
+        console.log(fillcolors);
+    }
+</script>
+
+</html>
